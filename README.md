@@ -93,7 +93,7 @@ the same way.
 
 - **First call** acquires a lock, asks `slurp` for a region, rounds the
   coordinates to the nearest even values (h264 + yuv420p requires this), and
-  starts `wf-recorder --no-dmabuf --pixel-format yuv420p` writing to a
+  starts `wf-recorder --no-dmabuf -D --pixel-format yuv420p` writing to a
   per-invocation directory under `/tmp/screencast-gif/`. The PID and that
   directory are written to `/tmp/screencast-gif.pid`. A backgrounded watchdog
   re-invokes the script after `MAX_SECS` to enforce the auto-stop.
@@ -111,13 +111,43 @@ independent of the daemon's notification quirks.
 
 - **`Failed to copy frame too many times` from wf-recorder** — fixed by
   passing `--no-dmabuf` (forces CPU buffer copy instead of DMA-BUF).
-- **Odd coordinates from slurp on fractional-scale monitors** — fixed by
-  rounding `X,Y` down and `W,H` up to even values before passing them to
-  `wf-recorder`.
-- **`flock` leaked into the recording subprocess** — wf-recorder is spawned
-  with `9>&-` so it does not inherit the lock FD.
-- **Lock held during slow GIF conversion** — released as soon as the recorder
-  is signalled, so a new recording can start immediately.
+- **Single-frame GIFs from static regions** — wf-recorder defaults to
+  damage-tracking and only requests new frames when the screen changes,
+  which collapses a quiet recording to a single frame. `-D` /
+  `--no-damage` forces continuous capture.
+- **Odd coordinates from slurp on fractional-scale monitors** — rounded to
+  even values before being passed to `wf-recorder` (h264 + yuv420p won't
+  encode odd dimensions).
+- **`flock` leaked into the recording subprocess** — every backgrounded
+  child closes inherited fds before exec'ing, so the recorder doesn't
+  pin the lock and outlive its purpose.
+- **Lock held during slow GIF conversion** — released as soon as the
+  recorder is signalled, so a new recording can start immediately.
+- **`wl-copy` keeping test harnesses alive** — `wl-copy` daemonises to
+  serve the clipboard contents until they're replaced. The daemon
+  inherits all parent fds; in particular, when the script is invoked
+  from a test harness like `bats`, the daemon would keep the harness's
+  output pipe open and prevent it from reaching EOF for the full
+  watchdog duration. The script strips inherited fds before invoking
+  `wl-copy`.
+
+## Advanced
+
+State file paths can be overridden via env vars, primarily so the test
+suite (and any concurrent automation) can stay isolated from a live
+recording:
+
+| Env var | Default |
+|---|---|
+| `SCREENCAST_GIF_PIDFILE` | `/tmp/screencast-gif.pid` |
+| `SCREENCAST_GIF_LOCKFILE` | `/tmp/screencast-gif.lock` |
+| `SCREENCAST_GIF_WORKDIR` | `/tmp/screencast-gif` |
+| `SCREENCAST_GIF_LOG` | `/tmp/screencast-gif.log` |
+| `SCREENCAST_GIF_REGION` | (unset — fall back to `slurp`) |
+
+The bar widget's polling assumes the defaults, so changing the pidfile
+location will hide ongoing recordings from the bar pill — only do it
+for tests or one-off scripted recordings.
 
 ## Tests
 
