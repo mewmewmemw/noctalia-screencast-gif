@@ -1,7 +1,5 @@
 # Screencast GIF — Noctalia plugin
 
-![Bar widget recording demo](demo.gif)
-
 A toggle-style screen recorder for [Hyprland](https://hyprland.org/) /
 [Sway](https://swaywm.org/) / any wlroots-based Wayland compositor that:
 

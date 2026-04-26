@@ -1,7 +1,5 @@
 # noctalia-screencast-gif
 
-![Bar widget recording demo](screencast-gif/demo.gif)
-
 Public repository hosting the **Screencast GIF** plugin for
 [noctalia-shell](https://github.com/noctalia-dev/noctalia-shell).
 
