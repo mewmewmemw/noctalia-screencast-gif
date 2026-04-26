@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "screencast-gif",
+      "name": "Screencast GIF",
+      "version": "0.1.0",
+      "official": false,
+      "author": "mewmewmemw",
+      "description": "Hotkey-driven region screencast that produces an animated GIF and copies it to the clipboard. Bar pill turns red while recording. Backed by wf-recorder + gifski.",
+      "repository": "https://github.com/mewmewmemw/noctalia-screencast-gif",
+      "minNoctaliaVersion": "4.6.6",
+      "license": "MIT",
+      "tags": [
+        "Bar",
+        "Recording",
+        "Hyprland",
+        "Sway",
+        "GIF",
+        "Utility"
+      ]
+    }
+  ]
+}

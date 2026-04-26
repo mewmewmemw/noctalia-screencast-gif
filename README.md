@@ -1,184 +1,81 @@
-# Screencast GIF — Noctalia plugin
+# noctalia-screencast-gif
 
-A toggle-style screen recorder for [Hyprland](https://hyprland.org/) /
-[Sway](https://swaywm.org/) / any wlroots-based Wayland compositor that:
+Public repository hosting the **Screencast GIF** plugin for
+[noctalia-shell](https://github.com/noctalia-dev/noctalia-shell).
 
-- selects a screen region with `slurp`,
-- records it with `wf-recorder`,
-- converts the result to an animated `.gif` with `gifski`,
-- copies the GIF straight to the Wayland clipboard (as `image/gif`),
-- saves the file alongside in a configurable directory,
-- shows a **red pill in the [noctalia](https://noctalia.dev/) bar** while
-  recording is active, and turns back to neutral when the GIF is ready.
+The plugin itself lives under [`screencast-gif/`](screencast-gif/) — see its
+[README](screencast-gif/README.md) for what it does, requirements, settings,
+and the design notes.
 
-Press your hotkey once to pick a region and start recording, press again to
-stop and grab the GIF — both from the keyboard and by clicking the pill.
+## Install
 
-## Why
+### Option A — add this repo as a custom source in noctalia
 
-Most existing Wayland screen recorders either give you a `.mp4` or open a GUI.
-There was no off-the-shelf "press hotkey, draw region, get a GIF in clipboard,
-with a visible recording indicator" tool — so this plugin glues the best
-existing pieces (`wf-recorder` + `gifski`) together and exposes the whole
-thing through a noctalia bar widget.
+Open noctalia's plugin manager, add a custom source pointing at
+`https://github.com/mewmewmemw/noctalia-screencast-gif`, then enable
+**Screencast GIF** and add the bar widget.
 
-## Requirements
-
-| Tool | Purpose | Arch package |
-|---|---|---|
-| [`wf-recorder`](https://github.com/ammen99/wf-recorder) | screen capture | `wf-recorder` |
-| [`gifski`](https://gif.ski/) | high-quality GIF encoding | `gifski` |
-| [`slurp`](https://github.com/emersion/slurp) | region selection | `slurp` |
-| `ffmpeg` | extract frames from the captured mp4 | `ffmpeg` |
-| `wl-clipboard` | clipboard plumbing (`wl-copy`) | `wl-clipboard` |
-| `flock` (util-linux) | invocation locking | `util-linux` |
-| `notify-send` | start/end notifications (optional) | `libnotify` |
-| [noctalia-shell](https://noctalia.dev/) ≥ 4.6.6 | the shell hosting the bar widget | `noctalia-shell` |
+### Option B — manual install
 
 ```bash
-sudo pacman -S --needed wf-recorder gifski slurp ffmpeg wl-clipboard libnotify
+git clone --depth 1 https://github.com/mewmewmemw/noctalia-screencast-gif /tmp/noctalia-screencast-gif
+cp -r /tmp/noctalia-screencast-gif/screencast-gif ~/.config/noctalia/plugins/
 ```
 
-The plugin works on any wlroots compositor; the noctalia bar widget obviously
-requires noctalia.
+Then enable it in noctalia (or set
+`states["screencast-gif"].enabled = true` in
+`~/.config/noctalia/plugins.json`) and add the **Screencast GIF** widget to
+your bar.
 
-## Installation
-
-```bash
-git clone https://github.com/mewmewmemw/noctalia-screencast-gif \
-    ~/.config/noctalia/plugins/screencast-gif
-```
-
-Then enable the plugin in noctalia's plugin manager (or set
-`states["screencast-gif"].enabled = true` in `~/.config/noctalia/plugins.json`
-and restart noctalia), and add the **Screencast GIF** widget to your bar
-through noctalia's bar settings.
-
-## Hyprland keybind
-
-Bind a hotkey to invoke the plugin's IPC `toggle` (recommended — uses the
-plugin's bundled script with your configured FPS / max-time / output dir):
+### Hyprland keybind
 
 ```ini
 bind = SHIFT, XF86Cut, exec, qs -c noctalia-shell ipc call plugin:screencast-gif toggle
 ```
 
-Alternatively, run the script directly (will use defaults unless you override
-the env vars yourself):
+(Pick whatever modifier+key you like. `SHIFT, XF86Cut` is `Fn+Shift+F10` on
+the maintainer's laptop.)
 
-```ini
-bind = SHIFT, XF86Cut, exec, ~/.config/noctalia/plugins/screencast-gif/screencast-gif.sh
+## Repository layout
+
 ```
-
-(Pick whichever modifier+key you prefer; `SHIFT, XF86Cut` happens to be
-`Fn+Shift+F10` on the maintainer's laptop.)
-
-## Settings
-
-Configurable via the plugin's settings panel in noctalia:
-
-| Setting | Default | Notes |
-|---|---|---|
-| Output directory | `~/Screenshots` | Tilde is expanded. Created if missing. |
-| Frame rate | `20` | 15–25 is a good balance between smoothness and file size. |
-| Auto-stop after (seconds) | `120` | Safety net so you don't leave it recording forever. `0` disables. |
-
-The settings are passed to the script via environment variables (`FPS`,
-`MAX_SECS`, `OUTDIR`), so direct invocations of the script can override them
-the same way.
-
-## How it works
-
-`screencast-gif.sh` is a toggle:
-
-- **First call** acquires a lock, asks `slurp` for a region, rounds the
-  coordinates to the nearest even values (h264 + yuv420p requires this), and
-  starts `wf-recorder --no-dmabuf -D --pixel-format yuv420p` writing to a
-  per-invocation directory under `/tmp/screencast-gif/`. The PID and that
-  directory are written to `/tmp/screencast-gif.pid`. A backgrounded watchdog
-  re-invokes the script after `MAX_SECS` to enforce the auto-stop.
-- **Second call** sees the live PID in the pidfile, releases the lock
-  immediately (so a third invocation can start a brand-new recording while
-  conversion is still running), sends `SIGINT` to `wf-recorder`, waits for it
-  to flush the mp4, then runs `ffmpeg` to extract frames and `gifski` to
-  encode the GIF, copies it to the clipboard, and saves it to `OUTDIR`.
-
-The QML side (`Main.qml`) polls `/tmp/screencast-gif.pid` once a second to
-keep the bar widget's `recordingActive` flag in sync. Cheap, robust, and
-independent of the daemon's notification quirks.
-
-### Notable quirks handled
-
-- **`Failed to copy frame too many times` from wf-recorder** — fixed by
-  passing `--no-dmabuf` (forces CPU buffer copy instead of DMA-BUF).
-- **Single-frame GIFs from static regions** — wf-recorder defaults to
-  damage-tracking and only requests new frames when the screen changes,
-  which collapses a quiet recording to a single frame. `-D` /
-  `--no-damage` forces continuous capture.
-- **Odd coordinates from slurp on fractional-scale monitors** — rounded to
-  even values before being passed to `wf-recorder` (h264 + yuv420p won't
-  encode odd dimensions).
-- **`flock` leaked into the recording subprocess** — every backgrounded
-  child closes inherited fds before exec'ing, so the recorder doesn't
-  pin the lock and outlive its purpose.
-- **Lock held during slow GIF conversion** — released as soon as the
-  recorder is signalled, so a new recording can start immediately.
-- **`wl-copy` keeping test harnesses alive** — `wl-copy` daemonises to
-  serve the clipboard contents until they're replaced. The daemon
-  inherits all parent fds; in particular, when the script is invoked
-  from a test harness like `bats`, the daemon would keep the harness's
-  output pipe open and prevent it from reaching EOF for the full
-  watchdog duration. The script strips inherited fds before invoking
-  `wl-copy`.
-
-## Advanced
-
-State file paths can be overridden via env vars, primarily so the test
-suite (and any concurrent automation) can stay isolated from a live
-recording:
-
-| Env var | Default |
-|---|---|
-| `SCREENCAST_GIF_PIDFILE` | `/tmp/screencast-gif.pid` |
-| `SCREENCAST_GIF_LOCKFILE` | `/tmp/screencast-gif.lock` |
-| `SCREENCAST_GIF_WORKDIR` | `/tmp/screencast-gif` |
-| `SCREENCAST_GIF_LOG` | `/tmp/screencast-gif.log` |
-| `SCREENCAST_GIF_REGION` | (unset — fall back to `slurp`) |
-
-The bar widget's polling assumes the defaults, so changing the pidfile
-location will hide ongoing recordings from the bar pill — only do it
-for tests or one-off scripted recordings.
+.
+├── screencast-gif/          # the plugin itself (this is what gets installed)
+│   ├── manifest.json
+│   ├── README.md            # plugin docs, requirements, settings, design
+│   ├── preview.png          # 16:9 thumbnail used by noctalia's plugin gallery
+│   ├── Main.qml             # IPC + recording-state polling
+│   ├── BarWidget.qml        # bar pill (red = recording)
+│   ├── Settings.qml         # plugin settings UI
+│   └── screencast-gif.sh    # the wf-recorder + gifski + wl-copy pipeline
+├── tests/                   # bats-core suite + shellcheck driver
+│   ├── screencast-gif.bats
+│   ├── lint.sh
+│   └── README.md
+├── registry.json            # noctalia plugin registry (single entry)
+└── .github/workflows/ci.yml # shellcheck on every push
+```
 
 ## Tests
 
 ```bash
 sudo pacman -S bats shellcheck     # one-time
-bats tests/                        # full suite
+bats tests/                        # full suite (15 cases, ~40s)
 ./tests/lint.sh                    # shellcheck only
 ```
 
-The suite is built on [bats-core][bats] and covers core lifecycle, region
-rounding, concurrency, slurp cancellation, the auto-stop watchdog, env-var
-overrides, and recovery from stale state. Each test runs in an isolated
-tmpdir, so it's safe to run while noctalia and the plugin are live in your
-session — your real recordings and `~/Screenshots` are not touched.
+The bats suite drives a real `wf-recorder + slurp + wl-copy` pipeline and
+therefore needs a live wlroots Wayland session. CI only runs the lint step
+for that reason. See [tests/README.md](tests/README.md).
 
-`tests/README.md` has the full breakdown. CI runs `shellcheck` on every
-push; the bats suite itself needs a real wlroots Wayland session and is
-local-only.
+## Contributing
 
-[bats]: https://github.com/bats-core/bats-core
+Bug reports and PRs welcome. The code is small (one shell script + four
+QML files). The plugin docs in
+[`screencast-gif/README.md`](screencast-gif/README.md#how-it-works) cover
+the "How it works" and "Notable quirks handled" sections — read those before
+opening a PR that touches the recorder pipeline.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-## Credits
-
-- [wf-recorder](https://github.com/ammen99/wf-recorder) by Ilia Bozhinov
-- [gifski](https://github.com/ImageOptim/gifski) by Kornel Lesiński
-- [noctalia-shell](https://github.com/noctalia-dev/noctalia-shell) and its
-  plugin system, particularly the
-  [screen-shot-and-record](https://github.com/noctalia-dev/noctalia-plugins/tree/main/screen-shot-and-record)
-  plugin which served as the reference for the bar-widget recording-state
-  pattern.
+[MIT](LICENSE).

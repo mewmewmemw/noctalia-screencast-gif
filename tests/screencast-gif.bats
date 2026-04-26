@@ -12,7 +12,7 @@
 
 setup() {
     PROJECT_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-    SCRIPT="$PROJECT_ROOT/screencast-gif.sh"
+    SCRIPT="$PROJECT_ROOT/screencast-gif/screencast-gif.sh"
 
     TESTDIR=$(mktemp -d -t screencast-gif-test.XXXXXX)
     export SCREENCAST_GIF_PIDFILE="$TESTDIR/pid"
