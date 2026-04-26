@@ -41,6 +41,7 @@ teardown() {
 # helpers
 latest_gif() { ls -t "$OUTDIR"/screencast_*.gif 2>/dev/null | head -1; }
 
+# shellcheck disable=SC2120  # optional timeout arg
 wait_pidfile() {
     local timeout=${1:-3}
     local i=0
@@ -52,6 +53,7 @@ wait_pidfile() {
     return 1
 }
 
+# shellcheck disable=SC2120  # optional timeout arg
 wait_no_pidfile() {
     local timeout=${1:-10}
     local i=0
@@ -79,6 +81,7 @@ gif_duration_ms() {
 
 # Conversion (ffmpeg + gifski) runs after the PIDFILE is removed, so wait for
 # the GIF to actually appear in OUTDIR before asserting on it.
+# shellcheck disable=SC2120  # optional timeout arg
 wait_for_gif() {
     local timeout=${1:-15}
     local i=0
