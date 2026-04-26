@@ -121,16 +121,23 @@ independent of the daemon's notification quirks.
 
 ## Tests
 
-`tests/test-screencast-gif.sh` drives the script end-to-end (start, stop,
-double-stop, immediate restart, odd-coordinate rounding) and verifies a real
-GIF artifact and clipboard content. Run it from any Wayland session:
-
 ```bash
-./tests/test-screencast-gif.sh
+sudo pacman -S bats shellcheck     # one-time
+bats tests/                        # full suite
+./tests/lint.sh                    # shellcheck only
 ```
 
-The script bypasses `slurp` via `SCREENCAST_GIF_REGION` so the test runs
-unattended.
+The suite is built on [bats-core][bats] and covers core lifecycle, region
+rounding, concurrency, slurp cancellation, the auto-stop watchdog, env-var
+overrides, and recovery from stale state. Each test runs in an isolated
+tmpdir, so it's safe to run while noctalia and the plugin are live in your
+session — your real recordings and `~/Screenshots` are not touched.
+
+`tests/README.md` has the full breakdown. CI runs `shellcheck` on every
+push; the bats suite itself needs a real wlroots Wayland session and is
+local-only.
+
+[bats]: https://github.com/bats-core/bats-core
 
 ## License
 
